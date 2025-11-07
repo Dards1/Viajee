@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trip Pinboard – Florianópolis</title>
+  <meta name="description" content="Simple collaborative-style pinboard for planning a trip. Add cars, hotels, transport, and plans with title, price, image and link. Local-only (no server)." />
+  <style>
+    :root{
+      --bg: #0f1220;        /* deep indigo */
+      --card: #171a2b;      /* slightly lighter */
+      --muted: #9aa4b2;
+      --text: #f5f7fb;
+      --accent: #54d2d2;    /* teal */
+      --accent-2: #a882ff;  /* violet */
+      --danger: #ff6b6b;
+      --ok: #63e6be;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius-xl: 22px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 80% -100px, rgba(168,130,255,.25), transparent 60%),
+                  radial-gradient(900px 500px at -20% -60px, rgba(84,210,210,.20), transparent 60%), var(--bg);
+      color: var(--text);
+    }
+    a{color:var(--accent); text-decoration:none}
+    a:hover{text-decoration:underline}
+    header{
+      position: sticky; top:0; z-index:5;
+      backdrop-filter: blur(8px);
+      background: linear-gradient( to bottom, rgba(15,18,32,.85), rgba(15,18,32,.55) );
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .wrap{max-width:1100px; margin:0 auto; padding: 16px 18px}
+    .topbar{display:flex; align-items:center; gap:14px; justify-content:space-between}
+    .brand{display:flex; align-items:center; gap:12px}
+    .logo{
+      width:40px; height:40px; border-radius:12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display:grid; place-items:center; color:#0b0d16; font-weight:800
+    }
+    .title{font-weight:800; letter-spacing:.2px}
+    .subtitle{color:var(--muted); font-size:.92rem}
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+    .chip{
+      padding:8px 12px; border-radius: 999px; font-weight:600;
+      background: #1b1f31; color:#cdd6e5; border:1px solid rgba(255,255,255,.06)
+    }
+    .tabs{display:flex; gap:10px; flex-wrap:wrap}
+    .tab{
+      padding:10px 14px; border-radius: 999px; border:1px solid rgba(255,255,255,.08);
+      background:#13182a; color:#dfe6f5; cursor:pointer; font-weight:700;
+      transition:.2s transform; user-select:none
+    }
+    .tab.active{background: linear-gradient(135deg, rgba(84,210,210,.25), rgba(168,130,255,.25)); border-color: rgba(255,255,255,.18)}
+    .tab:active{transform:scale(.98)}
+
+    .panel{
+      margin:18px auto; background: rgba(19,24,42,.65); border:1px solid rgba(255,255,255,.07);
+      border-radius: var(--radius-xl); padding: 18px; box-shadow: var(--shadow);
+    }
+    .grid{
+      display:grid; grid-template-columns: repeat( auto-fill, minmax(240px, 1fr) ); gap:16px;
+    }
+    .card{
+      position:relative; overflow:hidden; border-radius: var(--radius-lg);
+      background: var(--card); border:1px solid rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+    }
+    .card.dragging{opacity:.6; outline:2px dashed rgba(255,255,255,.25)}
+    .thumb{
+      width:100%; aspect-ratio: 16/10; background:#0c0f1a; display:block; object-fit:cover
+    }
+    .content{padding:12px 14px}
+    .price{font-weight:800; font-size:1.05rem}
+    .note{color:var(--muted); font-size:.92rem; margin-top:4px}
+    .meta{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px}
+    .btns{display:flex; gap:8px}
+    button, .btn{
+      appearance:none; border:1px solid rgba(255,255,255,.10); background:#11162a;
+      color:#e8eefc; padding:9px 12px; border-radius:12px; font-weight:700; cursor:pointer;
+    }
+    button:hover,.btn:hover{border-color: rgba(255,255,255,.22)}
+    .btn-ghost{background:transparent}
+    .btn-danger{background:#201316; border-color:#3a1d25; color:#ff9aa0}
+    .btn-accent{background:linear-gradient(135deg, rgba(84,210,210,.2), rgba(168,130,255,.2)); border-color: rgba(255,255,255,.18)}
+
+    .toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-top:10px}
+    .toolbar .left, .toolbar .right{display:flex; gap:10px; flex-wrap:wrap}
+    .pill-input{display:flex; align-items:center; gap:8px; background:#0e1222; border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:8px 12px}
+    .pill-input input{background:transparent; border:none; outline:none; color:#fff; min-width:120px}
+    .pill-input input::placeholder{color:#8390a3}
+    .form{display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap:10px; margin-top:10px}
+    .form .wide{grid-column: 1 / -1}
+
+    .footer{opacity:.8; color:var(--muted); font-size:.9rem; text-align:center; margin:40px 0}
+    .empty{color:var(--muted); text-align:center; padding:22px}
+    .like{cursor:pointer; user-select:none}
+    .tag{font-size:.78rem; padding:4px 8px; border-radius:999px; background:#1e2236; color:#cdd6e5; border:1px solid rgba(255,255,255,.06)}
+
+    @media (max-width:640px){
+      .form{grid-template-columns: 1fr}
+      .hide-sm{display:none}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap topbar">
+      <div class="brand">
+        <div class="logo">✈</div>
+        <div>
+          <div class="title">Trip Pinboard – Florianópolis</div>
+          <div class="subtitle">Pin options with title · price · image · link. Local-only (saved in your browser).</div>
+        </div>
+      </div>
+      <div class="row hide-sm">
+        <span class="chip">No login</span>
+        <span class="chip">LocalStorage</span>
+        <span class="chip">Export / Import</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Tabs -->
+    <div class="panel">
+      <div class="tabs" id="tabs"></div>
+      <div class="toolbar">
+        <div class="left">
+          <div class="pill-input"><span>🔎</span><input id="search" placeholder="Filter by title or note…"></div>
+          <button class="btn" id="sortPrice">Sort by price</button>
+          <button class="btn" id="sortTitle">Sort by title</button>
+        </div>
+        <div class="right">
+          <button class="btn-accent" id="exportBtn">Export JSON</button>
+          <label class="btn" for="importFile">Import JSON</label>
+          <input type="file" id="importFile" accept="application/json" style="display:none">
+          <button class="btn-ghost" id="demoBtn">Load demo</button>
+          <button class="btn-danger" id="clearBtn">Clear all</button>
+        </div>
+      </div>
+
+      <!-- Add form -->
+      <section class="form" id="addForm">
+        <div class="pill-input"><span>📝</span><input id="title" placeholder="Title (e.g., Fiat Argo or Hotel XYZ)" /></div>
+        <div class="pill-input"><span>💲</span><input id="price" placeholder="Price (e.g., 150 USD)" /></div>
+        <div class="pill-input wide"><span>🔗</span><input id="link" placeholder="Link (https://…)" /></div>
+        <div class="pill-input wide"><span>🖼️</span><input id="image" placeholder="Image URL (https://…)" /></div>
+        <div class="pill-input wide"><span>🗒️</span><input id="note" placeholder="Notes (optional)" /></div>
+        <div style="display:flex; gap:10px; align-items:center">
+          <button id="addBtn">Add to <span id="addCatLabel"></span></button>
+          <label class="pill-input"><span>🏷️</span><input id="tag" placeholder="Tag (optional: e.g., refundable, 4pax)"></label>
+        </div>
+      </section>
+    </div>
+
+    <!-- Cards grid -->
+    <section class="panel">
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty" style="display:none">Nothing here yet. Add your first card above ✨</div>
+    </section>
+
+    <div class="footer">Built for friends planning a trip to Floripa. Tip: use <strong>Export</strong> to share a JSON with your group and <strong>Import</strong> on their browsers.</div>
+  </main>
+
+  <script>
+    /**
+     * Trip Pinboard – Single-file web app
+     * - 4 default categories
+     * - Add items (title, price, link, image, note, optional tag)
+     * - Drag to reorder, edit, delete, like
+     * - LocalStorage persistence
+     * - Export/Import JSON to collaborate manually
+     */
+
+    const LS_KEY = 'trip-pinboard-v1';
+
+    const DEFAULT_CATEGORIES = [
+      { id:'cars', name:'Cars' },
+      { id:'hotels', name:'Hotels' },
+      { id:'transport', name:'Transport to Floripa' },
+      { id:'plans', name:'Plans & Ideas' },
+    ];
+
+    let state = loadState();
+    let currentCat = state.categories[0].id;
+    let searchQuery = '';
+    let sortMode = null; // 'price' | 'title' | null
+
+    // ------ Elements ------
+    const tabsEl = document.getElementById('tabs');
+    const gridEl = document.getElementById('grid');
+    const emptyEl = document.getElementById('empty');
+
+    const titleEl = document.getElementById('title');
+    const priceEl = document.getElementById('price');
+    const linkEl  = document.getElementById('link');
+    const imageEl = document.getElementById('image');
+    const noteEl  = document.getElementById('note');
+    const tagEl   = document.getElementById('tag');
+
+    const addBtn = document.getElementById('addBtn');
+    const addCatLabel = document.getElementById('addCatLabel');
+
+    const searchEl = document.getElementById('search');
+    const sortPriceBtn = document.getElementById('sortPrice');
+    const sortTitleBtn = document.getElementById('sortTitle');
+
+    const exportBtn = document.getElementById('exportBtn');
+    const importFile = document.getElementById('importFile');
+    const demoBtn = document.getElementById('demoBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    // ------ Init ------
+    renderTabs();
+    render();
+
+    // ------ Handlers ------
+    addBtn.addEventListener('click', () => {
+      const item = {
+        id: crypto.randomUUID(),
+        title: titleEl.value.trim(),
+        price: priceEl.value.trim(),
+        link: linkEl.value.trim(),
+        image: imageEl.value.trim(),
+        note: noteEl.value.trim(),
+        tag: tagEl.value.trim(),
+        likes: 0,
+        createdAt: Date.now()
+      };
+      if(!item.title){
+        alert('Please add a title');
+        return;
+      }
+      if(item.image && !isValidUrl(item.image)){
+        if(!confirm('Image URL looks invalid. Add anyway?')) return;
+      }
+      if(item.link && !isValidUrl(item.link)){
+        if(!confirm('Link looks invalid. Add anyway?')) return;
+      }
+      state.items[currentCat].push(item);
+      saveState();
+      clearForm();
+      render();
+    });
+
+    searchEl.addEventListener('input', () => { searchQuery = searchEl.value.toLowerCase(); render(); });
+    sortPriceBtn.addEventListener('click', () => { sortMode = 'price'; render(); });
+    sortTitleBtn.addEventListener('click', () => { sortMode = 'title'; render(); });
+
+    exportBtn.addEventListener('click', () => {
+      const dataStr = JSON.stringify(state, null, 2);
+      const blob = new Blob([dataStr], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'trip-pinboard.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    importFile.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try{
+          const imported = JSON.parse(reader.result);
+          if(!imported || !imported.items || !imported.categories) throw new Error('Invalid file');
+          state = imported; currentCat = state.categories[0].id; saveState(); renderTabs(); render();
+        }catch(err){
+          alert('Could not import: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+
+    demoBtn.addEventListener('click', () => {
+      if(!confirm('Load demo content? This will add sample cards to your current data.')) return;
+      addDemo(); saveState(); render();
+    });
+
+    clearBtn.addEventListener('click', () => {
+      if(confirm('Clear ALL data? This cannot be undone.')){
+        localStorage.removeItem(LS_KEY);
+        state = loadState(true); currentCat = state.categories[0].id; renderTabs(); render();
+      }
+    });
+
+    // ------ Functions ------
+    function loadState(fresh){
+      if(!fresh){
+        try{
+          const raw = localStorage.getItem(LS_KEY);
+          if(raw){
+            const parsed = JSON.parse(raw);
+            // ensure shape
+            if(parsed.items && parsed.categories){ return parsed; }
+          }
+        }catch(e){ console.warn('load error', e); }
+      }
+      // default
+      const catIds = DEFAULT_CATEGORIES.map(c=>c.id);
+      const items = {}; catIds.forEach(id => items[id] = []);
+      return { categories: DEFAULT_CATEGORIES, items };
+    }
+
+    function saveState(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+    function renderTabs(){
+      tabsEl.innerHTML = '';
+      state.categories.forEach(cat => {
+        const el = document.createElement('button');
+        el.className = 'tab' + (cat.id===currentCat ? ' active':'' );
+        el.textContent = cat.name;
+        el.onclick = () => { currentCat = cat.id; render(); };
+        tabsEl.appendChild(el);
+      });
+      addCatLabel.textContent = state.categories.find(c=>c.id===currentCat)?.name || '';
+    }
+
+    function render(){
+      renderTabs();
+      const items = [...state.items[currentCat]];
+      // filter
+      const filtered = items.filter(x => {
+        if(!searchQuery) return true;
+        return (x.title||'').toLowerCase().includes(searchQuery) || (x.note||'').toLowerCase().includes(searchQuery);
+      });
+      // sort
+      if(sortMode==='title') filtered.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
+      if(sortMode==='price') filtered.sort((a,b)=> parsePrice(a.price) - parsePrice(b.price));
+
+      gridEl.innerHTML = '';
+      if(filtered.length===0){ emptyEl.style.display='block'; } else { emptyEl.style.display='none'; }
+
+      filtered.forEach((item) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.draggable = true;
+        card.addEventListener('dragstart', (e)=>{ card.classList.add('dragging'); e.dataTransfer.setData('text/plain', item.id); });
+        card.addEventListener('dragend', ()=> card.classList.remove('dragging'));
+
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.loading = 'lazy';
+        img.alt = item.title || '';
+        img.src = item.image || placeholderImage(item.title);
+        img.onerror = () => { img.src = placeholderImage(item.title); };
+        card.appendChild(img);
+
+        const body = document.createElement('div');
+        body.className = 'content';
+        const h3 = document.createElement('div');
+        h3.style.fontWeight = '800';
+        h3.style.fontSize = '1.05rem';
+        if(item.link){
+          const a = document.createElement('a'); a.href = item.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = item.title || 'Untitled';
+          h3.appendChild(a);
+        } else { h3.textContent = item.title || 'Untitled'; }
+        body.appendChild(h3);
+
+        const price = document.createElement('div'); price.className = 'price'; price.textContent = item.price || '';
+        body.appendChild(price);
+
+        if(item.tag){
+          const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = item.tag; body.appendChild(tag);
+        }
+
+        if(item.note){ const p = document.createElement('div'); p.className='note'; p.textContent = item.note; body.appendChild(p); }
+
+        const meta = document.createElement('div'); meta.className = 'meta';
+        const btns = document.createElement('div'); btns.className = 'btns';
+
+        const like = document.createElement('div'); like.className='like'; like.title='Like'; like.textContent = `❤️ ${item.likes||0}`;
+        like.onclick = () => { item.likes = (item.likes||0)+1; saveState(); render(); };
+        meta.appendChild(like);
+
+        const editBtn = document.createElement('button'); editBtn.textContent='Edit';
+        editBtn.onclick = () => editItem(item.id);
+        const dupBtn = document.createElement('button'); dupBtn.textContent='Duplicate';
+        dupBtn.onclick = () => duplicateItem(item.id);
+        const delBtn = document.createElement('button'); delBtn.className='btn-danger'; delBtn.textContent='Delete';
+        delBtn.onclick = () => deleteItem(item.id);
+        btns.append(editBtn, dupBtn, delBtn);
+
+        meta.appendChild(btns);
+        body.appendChild(meta);
+        card.appendChild(body);
+
+        gridEl.appendChild(card);
+      });
+
+      // Enable drag reorder across the whole grid
+      enableDragReorder();
+    }
+
+    function enableDragReorder(){
+      gridEl.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        const dragging = document.querySelector('.card.dragging');
+        const afterEl = getDragAfterElement(gridEl, e.clientY);
+        if(afterEl == null){ gridEl.appendChild(dragging); }
+        else { gridEl.insertBefore(dragging, afterEl); }
+      });
+      gridEl.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const id = e.dataTransfer.getData('text/plain');
+        const newOrder = Array.from(gridEl.querySelectorAll('.card .content div[style] a, .card .content div[style]')).map(node => {
+          // find the article ancestor and read its first content title text
+          const article = node.closest('.card');
+          // infer by title text — then map back to item.id
+          const titleText = node.textContent.trim();
+          const item = state.items[currentCat].find(x=> (x.title||'Untitled')===titleText);
+          return item?.id;
+        }).filter(Boolean);
+        // If we captured a consistent list, reorder
+        const currentItems = state.items[currentCat];
+        if(newOrder.length === currentItems.length){
+          const reordered = newOrder.map(id => currentItems.find(x=>x.id===id));
+          state.items[currentCat] = reordered;
+          saveState();
+        }
+      }, { once:true });
+    }
+
+    function getDragAfterElement(container, y){
+      const draggableElements = [...container.querySelectorAll('.card:not(.dragging)')];
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if(offset < 0 && offset > closest.offset){
+          return { offset, element: child };
+        } else { return closest; }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+
+    function editItem(id){
+      const arr = state.items[currentCat];
+      const item = arr.find(x=>x.id===id);
+      if(!item) return;
+      const title = prompt('Title:', item.title || ''); if(title===null) return;
+      const price = prompt('Price:', item.price || ''); if(price===null) return;
+      const link  = prompt('Link URL:', item.link || ''); if(link===null) return;
+      const image = prompt('Image URL:', item.image || ''); if(image===null) return;
+      const note  = prompt('Notes:', item.note || ''); if(note===null) return;
+      const tag   = prompt('Tag (optional):', item.tag || ''); if(tag===null) return;
+      Object.assign(item, { title, price, link, image, note, tag });
+      saveState(); render();
+    }
+
+    function duplicateItem(id){
+      const arr = state.items[currentCat];
+      const item = arr.find(x=>x.id===id);
+      if(!item) return;
+      const clone = { ...item, id: crypto.randomUUID(), createdAt: Date.now(), likes: 0 };
+      arr.push(clone); saveState(); render();
+    }
+
+    function deleteItem(id){
+      const arr = state.items[currentCat];
+      const idx = arr.findIndex(x=>x.id===id);
+      if(idx>-1 && confirm('Delete this card?')){ arr.splice(idx,1); saveState(); render(); }
+    }
+
+    function clearForm(){ titleEl.value=''; priceEl.value=''; linkEl.value=''; imageEl.value=''; noteEl.value=''; tagEl.value=''; }
+
+    function isValidUrl(u){ try{ new URL(u); return true; } catch{ return false; } }
+
+    function parsePrice(str){
+      if(!str) return Number.POSITIVE_INFINITY;
+      const m = (str.match(/[\d.,]+/)||[''])[0].replace(/\./g,'').replace(',','.');
+      const num = parseFloat(m);
+      return isNaN(num) ? Number.POSITIVE_INFINITY : num;
+    }
+
+    function placeholderImage(seed){
+      const s = encodeURIComponent((seed||'Floripa').slice(0,40));
+      return `https://source.unsplash.com/600x400/?${s}`;
+    }
+
+    function addDemo(){
+      const demo = {
+        cars: [
+          {title:'Fiat Argo (Localiza)', price:'R$ 210/día', link:'https://www.localiza.com/', image:'https://images.unsplash.com/photo-1549921296-3a6b9e5d2e36', note:'Compact · automático', tag:'4 pax', likes:2},
+          {title:'Chevrolet Onix (Movida)', price:'R$ 230/día', link:'https://www.movida.com.br/', image:'https://images.unsplash.com/photo-1549921296-3a6b9e5d2e36', note:'Buen consumo', tag:'A/C', likes:1}
+        ],
+        hotels: [
+          {title:'Jurerê Hotel', price:'R$ 680/noche', link:'#', image:'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb', note:'Cerca de la playa', tag:'Cancelación gratis', likes:3},
+          {title:'Lagoa Inn', price:'R$ 420/noche', link:'#', image:'https://images.unsplash.com/photo-1501117716987-c8e1ecb2101f', note:'Zona Lagoa da Conceição', tag:'2 habitaciones', likes:0}
+        ],
+        transport: [
+          {title:'Vuelos MVD→FLN (AZUL)', price:'US$ 350 ida', link:'#', image:'https://images.unsplash.com/photo-1531973968078-9bb02785f13d', note:'1 escala', tag:'enero', likes:1},
+          {title:'Bus Floripa ↔ Aeropuerto', price:'R$ 12', link:'#', image:'https://images.unsplash.com/photo-1518558402055-d3c6ea091db1', note:'Linha 183 – TICEN', tag:'barato', likes:0}
+        ],
+        plans: [
+          {title:'Praia Mole', price:'gratis', link:'#', image:'https://images.unsplash.com/photo-1526483360412-f4dbaf036963', note:'surf & vistas', tag:'playa', likes:4},
+          {title:'Trilha Lagoinha do Leste', price:'gratis', link:'#', image:'https://images.unsplash.com/photo-1491553895911-0055eca6402d', note:'senderismo', tag:'trek', likes:2}
+        ]
+      };
+      Object.keys(demo).forEach(k=>{
+        const arr = demo[k].map(x => ({ id: crypto.randomUUID(), createdAt: Date.now(), ...x }));
+        state.items[k].push(...arr);
+      });
+    }
+  </script>
+</body>
+</html>
