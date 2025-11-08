@@ -361,12 +361,25 @@
   }
 
   function render(){
-    const items = [...(state.items[currentCat]||[])];
-    const filtered = items.filter(x =>
-      !searchQuery ||
-      (x.title||'').toLowerCase().includes(searchQuery) ||
-      (x.note||'').toLowerCase().includes(searchQuery)
-    );
+  // 🔧 vuelve a dibujar pestañas y el label del botón
+  renderTabs();
+
+  const items = [...(state.items[currentCat]||[])];
+  const filtered = items.filter(x =>
+    !searchQuery ||
+    (x.title||'').toLowerCase().includes(searchQuery) ||
+    (x.note||'').toLowerCase().includes(searchQuery)
+  );
+  if (sortMode==='title') filtered.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
+  if (sortMode==='price') filtered.sort((a,b)=> parsePrice(a.price) - parsePrice(b.price));
+
+  gridEl.innerHTML = '';
+  emptyEl.style.display = filtered.length ? 'none' : 'block';
+
+  for (const item of filtered) gridEl.appendChild(cardEl(item));
+  enableDragReorder();
+}
+
     if(sortMode==='title') filtered.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
     if(sortMode==='price') filtered.sort((a,b)=> parsePrice(a.price) - parsePrice(b.price));
 
