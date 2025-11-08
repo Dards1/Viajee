@@ -169,346 +169,313 @@
 
     <div class="footer">Built for friends planning a trip to Floripa. Tip: use <strong>Export</strong> to share a JSON with your group and <strong>Import</strong> on their browsers.</div>
   </main>
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-  <script>
-    /**
-     * Trip Pinboard – Single-file web app
-     * - 4 default categories
-     * - Add items (title, price, link, image, note, optional tag)
-     * - Drag to reorder, edit, delete, like
-     * - LocalStorage persistence
-     * - Export/Import JSON to collaborate manually
-     */
+  // ⬇️ TUS CREDENCIALES
+  const SUPABASE_URL = 'https://sgoegodfbqicmllblllq.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNnb2Vnb2RmYnFpY21sbGJsbGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MTMyNDUsImV4cCI6MjA3ODA4OTI0NX0.X2v2WGewNrz5UWipDhYU51lNWyIFueSs-y3jipDx3SA';
 
-    const LS_KEY = 'trip-pinboard-v1';
+  // Tablero público (sin login)
+  const BOARD_ID = 'viaje-floripa';
 
-    const DEFAULT_CATEGORIES = [
-      { id:'cars', name:'Cars' },
-      { id:'hotels', name:'Hotels' },
-      { id:'transport', name:'Transport to Floripa' },
-      { id:'plans', name:'Plans & Ideas' },
-    ];
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let state = loadState();
-    let currentCat = state.categories[0].id;
-    let searchQuery = '';
-    let sortMode = null; // 'price' | 'title' | null
+  const DEFAULT_CATEGORIES = [
+    { id:'cars', name:'Cars' },
+    { id:'hotels', name:'Hotels' },
+    { id:'transport', name:'Transport to Floripa' },
+    { id:'plans', name:'Plans & Ideas' },
+  ];
 
-    // ------ Elements ------
-    const tabsEl = document.getElementById('tabs');
-    const gridEl = document.getElementById('grid');
-    const emptyEl = document.getElementById('empty');
+  // ====== UI refs (coinciden con tu HTML) ======
+  const tabsEl = document.getElementById('tabs');
+  const gridEl = document.getElementById('grid');
+  const emptyEl = document.getElementById('empty');
 
-    const titleEl = document.getElementById('title');
-    const priceEl = document.getElementById('price');
-    const linkEl  = document.getElementById('link');
-    const imageEl = document.getElementById('image');
-    const noteEl  = document.getElementById('note');
-    const tagEl   = document.getElementById('tag');
+  const titleEl = document.getElementById('title');
+  const priceEl = document.getElementById('price');
+  const linkEl  = document.getElementById('link');
+  const imageEl = document.getElementById('image');
+  const noteEl  = document.getElementById('note');
+  const tagEl   = document.getElementById('tag');
 
-    const addBtn = document.getElementById('addBtn');
-    const addCatLabel = document.getElementById('addCatLabel');
+  const addBtn = document.getElementById('addBtn');
+  const addCatLabel = document.getElementById('addCatLabel');
 
-    const searchEl = document.getElementById('search');
-    const sortPriceBtn = document.getElementById('sortPrice');
-    const sortTitleBtn = document.getElementById('sortTitle');
+  const searchEl = document.getElementById('search');
+  const sortPriceBtn = document.getElementById('sortPrice');
+  const sortTitleBtn = document.getElementById('sortTitle');
 
-    const exportBtn = document.getElementById('exportBtn');
-    const importFile = document.getElementById('importFile');
-    const demoBtn = document.getElementById('demoBtn');
-    const clearBtn = document.getElementById('clearBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const importFile = document.getElementById('importFile');
+  const demoBtn = document.getElementById('demoBtn');
+  const clearBtn = document.getElementById('clearBtn');
 
-    // ------ Init ------
-    renderTabs();
+  // ====== Estado (en memoria) ======
+  let state = { categories: DEFAULT_CATEGORIES, items: { cars:[], hotels:[], transport:[], plans:[] } };
+  let currentCat = 'cars';
+  let searchQuery = '';
+  let sortMode = null; // 'price' | 'title' | null
+
+  // ====== Init ======
+  renderTabs();
+  await initialLoad();
+  subscribeRealtime();
+
+  // ====== Handlers ======
+  addBtn.addEventListener('click', async () => {
+    const item = toRow({
+      category: currentCat,
+      title: titleEl.value.trim(),
+      price: priceEl.value.trim(),
+      link: linkEl.value.trim(),
+      image: imageEl.value.trim(),
+      note: noteEl.value.trim(),
+      tag: tagEl.value.trim()
+    });
+    if(!item.title){ alert('Please add a title'); return; }
+    if(item.image && !isValidUrl(item.image)){
+      if(!confirm('Image URL looks invalid. Add anyway?')) return;
+    }
+    if(item.link && !isValidUrl(item.link)){
+      if(!confirm('Link looks invalid. Add anyway?')) return;
+    }
+    const { error } = await supabase.from('items').insert(item);
+    if(error){ alert('Could not add: ' + error.message); return; }
+    clearForm();
+  });
+
+  searchEl.addEventListener('input', () => { searchQuery = searchEl.value.toLowerCase(); render(); });
+  sortPriceBtn.addEventListener('click', () => { sortMode = 'price'; render(); });
+  sortTitleBtn.addEventListener('click', () => { sortMode = 'title'; render(); });
+
+  exportBtn.addEventListener('click', async () => {
+    const { data } = await supabase.from('items').select('*').eq('board_id', BOARD_ID);
+    const byCat = { cars:[], hotels:[], transport:[], plans:[] };
+    for(const r of data){ (byCat[(r.category||'').toLowerCase()] ||= []).push(r); }
+    const blob = new Blob([JSON.stringify({ categories: DEFAULT_CATEGORIES, items: byCat }, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'viaje-floripa-export.json'; a.click(); URL.revokeObjectURL(url);
+  });
+
+  importFile.addEventListener('change', async (e) => {
+    const f = e.target.files?.[0]; if(!f) return;
+    try {
+      const imported = JSON.parse(await f.text());
+      const rows = [];
+      for(const [cat, arr] of Object.entries(imported.items||{})){
+        for(const x of arr){ rows.push(toRow({...x, category: cat})); }
+      }
+      if(rows.length){
+        const { error } = await supabase.from('items').insert(rows);
+        if(error) alert('Import failed: '+error.message);
+      }
+    } catch(err){ alert('Import failed: ' + err.message); }
+    e.target.value = '';
+  });
+
+  demoBtn.addEventListener('click', async () => {
+    if(!confirm('Load demo cards into the SHARED board?')) return;
+    const sample = [
+      {category:'cars', title:'Fiat Argo (Localiza)', price:'R$ 210/día', link:'https://www.localiza.com/'},
+      {category:'cars', title:'Chevrolet Onix (Movida)', price:'R$ 230/día', link:'https://www.movida.com.br/'},
+      {category:'hotels', title:'Jurerê Hotel', price:'R$ 680/noche', link:'#'},
+      {category:'transport', title:'Vuelos MVD→FLN (AZUL)', price:'US$ 350 ida', link:'#'},
+      {category:'plans', title:'Praia Mole', price:'gratis', link:'#'},
+    ].map(toRow);
+    await supabase.from('items').insert(sample);
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if(confirm('Delete ALL cards from the SHARED board?')){
+      await supabase.from('items').delete().eq('board_id', BOARD_ID);
+    }
+  });
+
+  // ====== Data layer ======
+  function toRow(x){
+    return {
+      id: crypto.randomUUID(),
+      board_id: BOARD_ID,
+      category: (x.category||'cars').toLowerCase(),
+      title: (x.title||'').trim(),
+      price: (x.price||'').trim(),
+      link: (x.link||'').trim(),
+      image: (x.image||'').trim(),
+      note: (x.note||'').trim(),
+      tag: (x.tag||'').trim(),
+      likes: x.likes ?? 0,
+      position: x.position ?? Date.now()
+    };
+  }
+
+  async function initialLoad(){
+    const { data, error } = await supabase
+      .from('items')
+      .select('*')
+      .eq('board_id', BOARD_ID)
+      .order('category', { ascending: true })
+      .order('position', { ascending: true })
+      .order('created_at', { ascending: true });
+    if(error){ console.error(error); return; }
+    state.items = { cars:[], hotels:[], transport:[], plans:[] };
+    for(const r of data){ (state.items[(r.category||'').toLowerCase()] ||= []).push(r); }
     render();
+  }
 
-    // ------ Handlers ------
-    addBtn.addEventListener('click', () => {
-      const item = {
-        id: crypto.randomUUID(),
-        title: titleEl.value.trim(),
-        price: priceEl.value.trim(),
-        link: linkEl.value.trim(),
-        image: imageEl.value.trim(),
-        note: noteEl.value.trim(),
-        tag: tagEl.value.trim(),
-        likes: 0,
-        createdAt: Date.now()
-      };
-      if(!item.title){
-        alert('Please add a title');
-        return;
-      }
-      if(item.image && !isValidUrl(item.image)){
-        if(!confirm('Image URL looks invalid. Add anyway?')) return;
-      }
-      if(item.link && !isValidUrl(item.link)){
-        if(!confirm('Link looks invalid. Add anyway?')) return;
-      }
-      state.items[currentCat].push(item);
-      saveState();
-      clearForm();
-      render();
+  function subscribeRealtime(){
+    supabase
+      .channel('items')
+      .on('postgres_changes', { event:'*', schema:'public', table:'items', filter:`board_id=eq.${BOARD_ID}` }, payload => {
+        applyChange(payload); render();
+      })
+      .subscribe();
+  }
+
+  function applyChange({ new: nv, old: ov }){
+    if(ov){
+      const ok = (ov.category||'').toLowerCase();
+      state.items[ok] = (state.items[ok]||[]).filter(i => i.id !== ov.id);
+    }
+    if(nv){
+      const nk = (nv.category||'').toLowerCase();
+      const arr = (state.items[nk] ||= []);
+      const i = arr.findIndex(x => x.id === nv.id);
+      if(i>-1) arr[i] = nv; else arr.push(nv);
+      arr.sort((a,b)=> (a.position||0)-(b.position||0) || (new Date(a.created_at)-new Date(b.created_at)));
+    }
+  }
+
+  // ====== UI (igual a tu versión) ======
+  function renderTabs(){
+    tabsEl.innerHTML = '';
+    state.categories.forEach(cat => {
+      const el = document.createElement('button');
+      el.className = 'tab' + (cat.id===currentCat ? ' active':'' );
+      el.textContent = cat.name;
+      el.onclick = () => { currentCat = cat.id; render(); };
+      tabsEl.appendChild(el);
     });
+    addCatLabel.textContent = state.categories.find(c=>c.id===currentCat)?.name || '';
+  }
 
-    searchEl.addEventListener('input', () => { searchQuery = searchEl.value.toLowerCase(); render(); });
-    sortPriceBtn.addEventListener('click', () => { sortMode = 'price'; render(); });
-    sortTitleBtn.addEventListener('click', () => { sortMode = 'title'; render(); });
+  function render(){
+    const items = [...(state.items[currentCat]||[])];
+    const filtered = items.filter(x =>
+      !searchQuery ||
+      (x.title||'').toLowerCase().includes(searchQuery) ||
+      (x.note||'').toLowerCase().includes(searchQuery)
+    );
+    if(sortMode==='title') filtered.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
+    if(sortMode==='price') filtered.sort((a,b)=> parsePrice(a.price) - parsePrice(b.price));
 
-    exportBtn.addEventListener('click', () => {
-      const dataStr = JSON.stringify(state, null, 2);
-      const blob = new Blob([dataStr], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'trip-pinboard.json'; a.click();
-      URL.revokeObjectURL(url);
+    gridEl.innerHTML = '';
+    emptyEl.style.display = filtered.length ? 'none' : 'block';
+
+    for(const item of filtered){ gridEl.appendChild(cardEl(item)); }
+    enableDragReorder();
+  }
+
+  function cardEl(item){
+    const card = document.createElement('article'); card.className='card'; card.draggable = true;
+    card.addEventListener('dragstart', (e)=>{ card.classList.add('dragging'); e.dataTransfer.setData('text/plain', item.id); });
+    card.addEventListener('dragend', ()=> card.classList.remove('dragging'));
+
+    const img = document.createElement('img');
+    img.className='thumb'; img.loading='lazy'; img.alt=item.title||'';
+    img.src = item.image || placeholderImage(item.title);
+    img.onerror = ()=>{ img.src = placeholderImage(item.title); };
+    card.appendChild(img);
+
+    const body = document.createElement('div'); body.className='content';
+    const h3 = document.createElement('div'); h3.style.fontWeight='800'; h3.style.fontSize='1.05rem';
+    if(item.link){ const a=document.createElement('a'); a.href=item.link; a.target='_blank'; a.rel='noopener noreferrer'; a.textContent=item.title||'Untitled'; h3.appendChild(a); }
+    else { h3.textContent = item.title || 'Untitled'; }
+    body.appendChild(h3);
+
+    const price = document.createElement('div'); price.className='price'; price.textContent=item.price||''; body.appendChild(price);
+    if(item.tag){ const tag=document.createElement('span'); tag.className='tag'; tag.textContent=item.tag; body.appendChild(tag); }
+    if(item.note){ const p=document.createElement('div'); p.className='note'; p.textContent=item.note; body.appendChild(p); }
+
+    const meta = document.createElement('div'); meta.className='meta';
+    const btns = document.createElement('div'); btns.className='btns';
+
+    const like = document.createElement('div'); like.className='like'; like.title='Like'; like.textContent = `❤️ ${item.likes||0}`;
+    like.onclick = async () => { await supabase.from('items').update({ likes: (item.likes||0)+1 }).eq('id', item.id); };
+    meta.appendChild(like);
+
+    const editBtn = document.createElement('button'); editBtn.textContent='Edit';
+    editBtn.onclick = async () => {
+      const title = prompt('Title:', item.title||''); if(title===null) return;
+      const price = prompt('Price:', item.price||''); if(price===null) return;
+      const link  = prompt('Link URL:', item.link||''); if(link===null) return;
+      const image = prompt('Image URL:', item.image||''); if(image===null) return;
+      const note  = prompt('Notes:', item.note||''); if(note===null) return;
+      const tag   = prompt('Tag (optional):', item.tag||''); if(tag===null) return;
+      await supabase.from('items').update({ title, price, link, image, note, tag }).eq('id', item.id);
+    };
+
+    const dupBtn = document.createElement('button'); dupBtn.textContent='Duplicate';
+    dupBtn.onclick = async () => {
+      const clone = { ...item, id: crypto.randomUUID(), created_at: null, likes:0, position: Date.now() };
+      delete clone.created_at;
+      await supabase.from('items').insert(clone);
+    };
+
+    const delBtn = document.createElement('button'); delBtn.className='btn-danger'; delBtn.textContent='Delete';
+    delBtn.onclick = async () => { if(confirm('Delete this card?')) await supabase.from('items').delete().eq('id', item.id); };
+
+    btns.append(editBtn, dupBtn, delBtn); meta.appendChild(btns); body.appendChild(meta); card.appendChild(body);
+    return card;
+  }
+
+  function enableDragReorder(){
+    gridEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      const dragging = document.querySelector('.card.dragging');
+      const afterEl = getDragAfterElement(gridEl, e.clientY);
+      if(afterEl == null) gridEl.appendChild(dragging); else gridEl.insertBefore(dragging, afterEl);
     });
-
-    importFile.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if(!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try{
-          const imported = JSON.parse(reader.result);
-          if(!imported || !imported.items || !imported.categories) throw new Error('Invalid file');
-          state = imported; currentCat = state.categories[0].id; saveState(); renderTabs(); render();
-        }catch(err){
-          alert('Could not import: ' + err.message);
-        }
-      };
-      reader.readAsText(file);
-      e.target.value = '';
-    });
-
-    demoBtn.addEventListener('click', () => {
-      if(!confirm('Load demo content? This will add sample cards to your current data.')) return;
-      addDemo(); saveState(); render();
-    });
-
-    clearBtn.addEventListener('click', () => {
-      if(confirm('Clear ALL data? This cannot be undone.')){
-        localStorage.removeItem(LS_KEY);
-        state = loadState(true); currentCat = state.categories[0].id; renderTabs(); render();
+    gridEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const cards = Array.from(gridEl.querySelectorAll('.card'));
+      const updates = [];
+      for(let i=0;i<cards.length;i++){
+        const titleNode = cards[i].querySelector('.content div');
+        const title = titleNode.textContent.trim();
+        const item = (state.items[currentCat]||[]).find(x => (x.title||'Untitled')===title);
+        if(item){ updates.push(supabase.from('items').update({ position: i+1 }).eq('id', item.id)); }
       }
-    });
+      await Promise.all(updates);
+    }, { once:true });
+  }
 
-    // ------ Functions ------
-    function loadState(fresh){
-      if(!fresh){
-        try{
-          const raw = localStorage.getItem(LS_KEY);
-          if(raw){
-            const parsed = JSON.parse(raw);
-            // ensure shape
-            if(parsed.items && parsed.categories){ return parsed; }
-          }
-        }catch(e){ console.warn('load error', e); }
-      }
-      // default
-      const catIds = DEFAULT_CATEGORIES.map(c=>c.id);
-      const items = {}; catIds.forEach(id => items[id] = []);
-      return { categories: DEFAULT_CATEGORIES, items };
-    }
+  function getDragAfterElement(container, y){
+    const els = [...container.querySelectorAll('.card:not(.dragging)')];
+    return els.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if(offset < 0 && offset > closest.offset) return { offset, element: child };
+      return closest;
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+  }
 
-    function saveState(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+  function clearForm(){ titleEl.value=''; priceEl.value=''; linkEl.value=''; imageEl.value=''; noteEl.value=''; tagEl.value=''; }
+  function isValidUrl(u){ try{ new URL(u); return true; } catch{ return false; } }
 
-    function renderTabs(){
-      tabsEl.innerHTML = '';
-      state.categories.forEach(cat => {
-        const el = document.createElement('button');
-        el.className = 'tab' + (cat.id===currentCat ? ' active':'' );
-        el.textContent = cat.name;
-        el.onclick = () => { currentCat = cat.id; render(); };
-        tabsEl.appendChild(el);
-      });
-      addCatLabel.textContent = state.categories.find(c=>c.id===currentCat)?.name || '';
-    }
+  function parsePrice(str){
+    if(!str) return Number.POSITIVE_INFINITY;
+    const m = (str.match(/[\\d.,]+/)||[''])[0].replace(/\\./g,'').replace(',','.');
+    const num = parseFloat(m);
+    return isNaN(num) ? Number.POSITIVE_INFINITY : num;
+  }
 
-    function render(){
-      renderTabs();
-      const items = [...state.items[currentCat]];
-      // filter
-      const filtered = items.filter(x => {
-        if(!searchQuery) return true;
-        return (x.title||'').toLowerCase().includes(searchQuery) || (x.note||'').toLowerCase().includes(searchQuery);
-      });
-      // sort
-      if(sortMode==='title') filtered.sort((a,b)=> (a.title||'').localeCompare(b.title||''));
-      if(sortMode==='price') filtered.sort((a,b)=> parsePrice(a.price) - parsePrice(b.price));
+  function placeholderImage(seed){
+    const s = encodeURIComponent((seed||'Floripa').slice(0,40));
+    return `https://source.unsplash.com/600x400/?${s}`;
+  }
+</script>
 
-      gridEl.innerHTML = '';
-      if(filtered.length===0){ emptyEl.style.display='block'; } else { emptyEl.style.display='none'; }
-
-      filtered.forEach((item) => {
-        const card = document.createElement('article');
-        card.className = 'card';
-        card.draggable = true;
-        card.addEventListener('dragstart', (e)=>{ card.classList.add('dragging'); e.dataTransfer.setData('text/plain', item.id); });
-        card.addEventListener('dragend', ()=> card.classList.remove('dragging'));
-
-        const img = document.createElement('img');
-        img.className = 'thumb';
-        img.loading = 'lazy';
-        img.alt = item.title || '';
-        img.src = item.image || placeholderImage(item.title);
-        img.onerror = () => { img.src = placeholderImage(item.title); };
-        card.appendChild(img);
-
-        const body = document.createElement('div');
-        body.className = 'content';
-        const h3 = document.createElement('div');
-        h3.style.fontWeight = '800';
-        h3.style.fontSize = '1.05rem';
-        if(item.link){
-          const a = document.createElement('a'); a.href = item.link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = item.title || 'Untitled';
-          h3.appendChild(a);
-        } else { h3.textContent = item.title || 'Untitled'; }
-        body.appendChild(h3);
-
-        const price = document.createElement('div'); price.className = 'price'; price.textContent = item.price || '';
-        body.appendChild(price);
-
-        if(item.tag){
-          const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = item.tag; body.appendChild(tag);
-        }
-
-        if(item.note){ const p = document.createElement('div'); p.className='note'; p.textContent = item.note; body.appendChild(p); }
-
-        const meta = document.createElement('div'); meta.className = 'meta';
-        const btns = document.createElement('div'); btns.className = 'btns';
-
-        const like = document.createElement('div'); like.className='like'; like.title='Like'; like.textContent = `❤️ ${item.likes||0}`;
-        like.onclick = () => { item.likes = (item.likes||0)+1; saveState(); render(); };
-        meta.appendChild(like);
-
-        const editBtn = document.createElement('button'); editBtn.textContent='Edit';
-        editBtn.onclick = () => editItem(item.id);
-        const dupBtn = document.createElement('button'); dupBtn.textContent='Duplicate';
-        dupBtn.onclick = () => duplicateItem(item.id);
-        const delBtn = document.createElement('button'); delBtn.className='btn-danger'; delBtn.textContent='Delete';
-        delBtn.onclick = () => deleteItem(item.id);
-        btns.append(editBtn, dupBtn, delBtn);
-
-        meta.appendChild(btns);
-        body.appendChild(meta);
-        card.appendChild(body);
-
-        gridEl.appendChild(card);
-      });
-
-      // Enable drag reorder across the whole grid
-      enableDragReorder();
-    }
-
-    function enableDragReorder(){
-      gridEl.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        const dragging = document.querySelector('.card.dragging');
-        const afterEl = getDragAfterElement(gridEl, e.clientY);
-        if(afterEl == null){ gridEl.appendChild(dragging); }
-        else { gridEl.insertBefore(dragging, afterEl); }
-      });
-      gridEl.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const id = e.dataTransfer.getData('text/plain');
-        const newOrder = Array.from(gridEl.querySelectorAll('.card .content div[style] a, .card .content div[style]')).map(node => {
-          // find the article ancestor and read its first content title text
-          const article = node.closest('.card');
-          // infer by title text — then map back to item.id
-          const titleText = node.textContent.trim();
-          const item = state.items[currentCat].find(x=> (x.title||'Untitled')===titleText);
-          return item?.id;
-        }).filter(Boolean);
-        // If we captured a consistent list, reorder
-        const currentItems = state.items[currentCat];
-        if(newOrder.length === currentItems.length){
-          const reordered = newOrder.map(id => currentItems.find(x=>x.id===id));
-          state.items[currentCat] = reordered;
-          saveState();
-        }
-      }, { once:true });
-    }
-
-    function getDragAfterElement(container, y){
-      const draggableElements = [...container.querySelectorAll('.card:not(.dragging)')];
-      return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if(offset < 0 && offset > closest.offset){
-          return { offset, element: child };
-        } else { return closest; }
-      }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
-
-    function editItem(id){
-      const arr = state.items[currentCat];
-      const item = arr.find(x=>x.id===id);
-      if(!item) return;
-      const title = prompt('Title:', item.title || ''); if(title===null) return;
-      const price = prompt('Price:', item.price || ''); if(price===null) return;
-      const link  = prompt('Link URL:', item.link || ''); if(link===null) return;
-      const image = prompt('Image URL:', item.image || ''); if(image===null) return;
-      const note  = prompt('Notes:', item.note || ''); if(note===null) return;
-      const tag   = prompt('Tag (optional):', item.tag || ''); if(tag===null) return;
-      Object.assign(item, { title, price, link, image, note, tag });
-      saveState(); render();
-    }
-
-    function duplicateItem(id){
-      const arr = state.items[currentCat];
-      const item = arr.find(x=>x.id===id);
-      if(!item) return;
-      const clone = { ...item, id: crypto.randomUUID(), createdAt: Date.now(), likes: 0 };
-      arr.push(clone); saveState(); render();
-    }
-
-    function deleteItem(id){
-      const arr = state.items[currentCat];
-      const idx = arr.findIndex(x=>x.id===id);
-      if(idx>-1 && confirm('Delete this card?')){ arr.splice(idx,1); saveState(); render(); }
-    }
-
-    function clearForm(){ titleEl.value=''; priceEl.value=''; linkEl.value=''; imageEl.value=''; noteEl.value=''; tagEl.value=''; }
-
-    function isValidUrl(u){ try{ new URL(u); return true; } catch{ return false; } }
-
-    function parsePrice(str){
-      if(!str) return Number.POSITIVE_INFINITY;
-      const m = (str.match(/[\d.,]+/)||[''])[0].replace(/\./g,'').replace(',','.');
-      const num = parseFloat(m);
-      return isNaN(num) ? Number.POSITIVE_INFINITY : num;
-    }
-
-    function placeholderImage(seed){
-      const s = encodeURIComponent((seed||'Floripa').slice(0,40));
-      return `https://source.unsplash.com/600x400/?${s}`;
-    }
-
-    function addDemo(){
-      const demo = {
-        cars: [
-          {title:'Fiat Argo (Localiza)', price:'R$ 210/día', link:'https://www.localiza.com/', image:'https://images.unsplash.com/photo-1549921296-3a6b9e5d2e36', note:'Compact · automático', tag:'4 pax', likes:2},
-          {title:'Chevrolet Onix (Movida)', price:'R$ 230/día', link:'https://www.movida.com.br/', image:'https://images.unsplash.com/photo-1549921296-3a6b9e5d2e36', note:'Buen consumo', tag:'A/C', likes:1}
-        ],
-        hotels: [
-          {title:'Jurerê Hotel', price:'R$ 680/noche', link:'#', image:'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb', note:'Cerca de la playa', tag:'Cancelación gratis', likes:3},
-          {title:'Lagoa Inn', price:'R$ 420/noche', link:'#', image:'https://images.unsplash.com/photo-1501117716987-c8e1ecb2101f', note:'Zona Lagoa da Conceição', tag:'2 habitaciones', likes:0}
-        ],
-        transport: [
-          {title:'Vuelos MVD→FLN (AZUL)', price:'US$ 350 ida', link:'#', image:'https://images.unsplash.com/photo-1531973968078-9bb02785f13d', note:'1 escala', tag:'enero', likes:1},
-          {title:'Bus Floripa ↔ Aeropuerto', price:'R$ 12', link:'#', image:'https://images.unsplash.com/photo-1518558402055-d3c6ea091db1', note:'Linha 183 – TICEN', tag:'barato', likes:0}
-        ],
-        plans: [
-          {title:'Praia Mole', price:'gratis', link:'#', image:'https://images.unsplash.com/photo-1526483360412-f4dbaf036963', note:'surf & vistas', tag:'playa', likes:4},
-          {title:'Trilha Lagoinha do Leste', price:'gratis', link:'#', image:'https://images.unsplash.com/photo-1491553895911-0055eca6402d', note:'senderismo', tag:'trek', likes:2}
-        ]
-      };
-      Object.keys(demo).forEach(k=>{
-        const arr = demo[k].map(x => ({ id: crypto.randomUUID(), createdAt: Date.now(), ...x }));
-        state.items[k].push(...arr);
-      });
-    }
-  </script>
 </body>
 </html>
