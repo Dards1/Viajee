@@ -1,186 +1,202 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Trip Pinboard – Florianópolis</title>
-  <meta name="description" content="Simple collaborative-style pinboard for planning a trip. Add cars, hotels, transport, and plans with title, price, image and link. Local-only (no server)." />
+  <title>Viaje Floripa</title>
+  <meta name="description" content="Pinboard colaborativo simple para planear un viaje. Agrega autos, hoteles, transporte y planes con título, precio, imagen y enlace. Tablero público (sin login)." />
   <style>
     :root{
-      --bg: #0f1220;        /* deep indigo */
-      --card: #171a2b;      /* slightly lighter */
-      --muted: #9aa4b2;
-      --text: #f5f7fb;
-      --accent: #54d2d2;    /* teal */
-      --accent-2: #a882ff;  /* violet */
-      --danger: #ff6b6b;
-      --ok: #63e6be;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
-      --radius-xl: 22px;
-      --radius-lg: 16px;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --muted: #64748b;
+      --text: #0f172a;
+      --line: #e2e8f0;
+      --accent: #2563eb;
+      --accent-2: #22c55e;
+      --danger: #ef4444;
+      --shadow: 0 6px 18px rgba(15,23,42,.06);
+      --radius-xl: 18px;
+      --radius-lg: 14px;
       --radius-md: 12px;
-      --radius-sm: 8px;
+      --radius-sm: 10px;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
     body{
-      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      background: radial-gradient(1200px 600px at 80% -100px, rgba(168,130,255,.25), transparent 60%),
-                  radial-gradient(900px 500px at -20% -60px, rgba(84,210,210,.20), transparent 60%), var(--bg);
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: var(--bg);
       color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     a{color:var(--accent); text-decoration:none}
     a:hover{text-decoration:underline}
+
+    /* Header con título centrado */
     header{
-      position: sticky; top:0; z-index:5;
+      position: sticky; top:0; z-index:10;
+      background: #ffffffcc;
       backdrop-filter: blur(8px);
-      background: linear-gradient( to bottom, rgba(15,18,32,.85), rgba(15,18,32,.55) );
-      border-bottom: 1px solid rgba(255,255,255,.06);
+      border-bottom: 1px solid var(--line);
     }
-    .wrap{max-width:1100px; margin:0 auto; padding: 16px 18px}
-    .topbar{display:flex; align-items:center; gap:14px; justify-content:space-between}
-    .brand{display:flex; align-items:center; gap:12px}
+    .wrap{max-width:1000px; margin:0 auto; padding: 16px 18px}
+    .topbar{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+    }
     .logo{
-      width:40px; height:40px; border-radius:12px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      display:grid; place-items:center; color:#0b0d16; font-weight:800
+      width:36px; height:36px; border-radius:10px;
+      display:grid; place-items:center; font-weight:800; color:#111827;
+      background: linear-gradient(135deg, #e0ecff, #dcfce7);
+      border:1px solid var(--line);
+      justify-self:start;
     }
-    .title{font-weight:800; letter-spacing:.2px}
-    .subtitle{color:var(--muted); font-size:.92rem}
-    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
-    .chip{
-      padding:8px 12px; border-radius: 999px; font-weight:600;
-      background: #1b1f31; color:#cdd6e5; border:1px solid rgba(255,255,255,.06)
+    .headline{
+      justify-self:center;
+      font-weight:800;
+      letter-spacing:.2px;
+      font-size:1.1rem;
+    }
+    .spacer{justify-self:end;} /* vacío para balancear grid */
+
+    /* Paneles */
+    .panel{
+      margin:16px auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      box-shadow: var(--shadow);
     }
 
-    .tabs{display:flex; gap:10px; flex-wrap:wrap}
+    /* Tabs centradas tipo “segmented control” */
+    .tabs{
+      display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
+      padding: 2px; background:#f1f5f9; border:1px solid var(--line);
+      border-radius: 999px; margin-bottom: 12px;
+    }
     .tab{
-      padding:12px 18px; border-radius: 999px; border:1px solid rgba(255,255,255,.08);
-      background:#13182a; color:#dfe6f5; cursor:pointer; font-weight:800;
-      transition:.2s transform; user-select:none; font-size:1.05rem;
+      padding:10px 14px; border-radius:999px; border:1px solid transparent;
+      background: transparent; cursor:pointer; font-weight:700; user-select:none; font-size:1rem; color:#0f172a;
+      transition: background .15s ease, transform .05s ease;
     }
-    /* Make Cars / Hotels / Transport bigger */
     .tab[data-id="cars"], .tab[data-id="hotels"], .tab[data-id="transport"]{
-      font-size:1.25rem; padding:14px 22px;
+      font-size:1.05rem; padding:12px 18px;
     }
+    .tab:hover{background:#e2e8f0}
     .tab.active, .tab[aria-selected="true"]{
-      background: linear-gradient(135deg, rgba(84,210,210,.30), rgba(168,130,255,.30));
-      border-color: rgba(255,255,255,.28);
-      box-shadow: 0 8px 22px rgba(0,0,0,.45), 0 0 0 2px rgba(84,210,210,.12) inset;
-      outline: 0;
+      background:#ffffff;
+      border-color: var(--line);
+      box-shadow: 0 1px 0 #fff inset;
     }
     .tab:active{transform:scale(.98)}
 
-    .panel{
-      margin:18px auto; background: rgba(19,24,42,.65); border:1px solid rgba(255,255,255,.07);
-      border-radius: var(--radius-xl); padding: 18px; box-shadow: var(--shadow);
+    /* Barra de herramientas */
+    .toolbar{display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap}
+    .toolbar .left, .toolbar .right{display:flex; gap:10px; flex-wrap:wrap}
+    .pill-input{
+      display:flex; align-items:center; gap:8px;
+      background:#ffffff; border:1px solid var(--line); border-radius:999px; padding:8px 12px;
     }
+    .pill-input input{background:transparent; border:none; outline:none; color:var(--text); min-width:160px}
+    .pill-input input::placeholder{color:#94a3b8}
+    button, .btn{
+      appearance:none; border:1px solid var(--line); background:#ffffff;
+      color:var(--text); padding:9px 12px; border-radius:12px; font-weight:700; cursor:pointer;
+    }
+    button:hover,.btn:hover{background:#f8fafc}
+    .btn-primary{
+      border-color: #c7d2fe;
+      background: linear-gradient(180deg, #f0f7ff, #e6ffef);
+    }
+    .btn-danger{border-color:#fecaca; background:#fff1f2; color:#991b1b}
+
+    /* Formulario */
+    .form{display:grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap:10px; margin-top:10px}
+    .form .wide{grid-column: 1 / -1}
+
+    /* Grid & Cards */
     .grid{
-      display:grid; grid-template-columns: repeat( auto-fill, minmax(240px, 1fr) ); gap:16px;
+      display:grid; grid-template-columns: repeat( auto-fill, minmax(240px, 1fr) ); gap:14px;
     }
     .card{
       position:relative; overflow:hidden; border-radius: var(--radius-lg);
-      background: var(--card); border:1px solid rgba(255,255,255,.06);
+      background: var(--card); border:1px solid var(--line);
       box-shadow: var(--shadow);
     }
-    .card.dragging{opacity:.6; outline:2px dashed rgba(255,255,255,.25)}
-    .thumb{
-      width:100%; aspect-ratio: 16/10; background:#0c0f1a; display:block; object-fit:cover
-    }
+    .thumb{width:100%; aspect-ratio: 16/10; background:#f1f5f9; display:block; object-fit:cover}
     .content{padding:12px 14px}
-    .price{font-weight:800; font-size:1.05rem}
-    .note{color:var(--muted); font-size:.92rem; margin-top:4px}
+    .h3{font-weight:800; font-size:1.02rem; line-height:1.2}
+    .price{font-weight:800; font-size:1rem; margin-top:6px}
+    .note{color:var(--muted); font-size:.92rem; margin-top:6px}
     .meta{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:10px}
-    .btns{display:flex; gap:8px}
-    button, .btn{
-      appearance:none; border:1px solid rgba(255,255,255,.10); background:#11162a;
-      color:#e8eefc; padding:9px 12px; border-radius:12px; font-weight:700; cursor:pointer;
-    }
-    button:hover,.btn:hover{border-color: rgba(255,255,255,.22)}
-    .btn-ghost{background:transparent}
-    .btn-danger{background:#201316; border-color:#3a1d25; color:#ff9aa0}
-    .btn-accent{background:linear-gradient(135deg, rgba(84,210,210,.2), rgba(168,130,255,.2)); border-color: rgba(255,255,255,.18)}
-
-    .toolbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-top:10px}
-    .toolbar .left, .toolbar .right{display:flex; gap:10px; flex-wrap:wrap}
-    .pill-input{display:flex; align-items:center; gap:8px; background:#0e1222; border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:8px 12px}
-    .pill-input input{background:transparent; border:none; outline:none; color:#fff; min-width:120px}
-    .pill-input input::placeholder{color:#8390a3}
-    .form{display:grid; grid-template-columns: repeat(2, minmax(160px, 1fr)); gap:10px; margin-top:10px}
-    .form .wide{grid-column: 1 / -1}
-
-    .footer{opacity:.8; color:var(--muted); font-size:.9rem; text-align:center; margin:40px 0}
-    .empty{color:var(--muted); text-align:center; padding:22px}
     .like{cursor:pointer; user-select:none}
-    .tag{font-size:.78rem; padding:4px 8px; border-radius:999px; background:#1e2236; color:#cdd6e5; border:1px solid rgba(255,255,255,.06)}
+    .tag{font-size:.78rem; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#334155; border:1px solid #c7d2fe}
+
+    .empty{color:var(--muted); text-align:center; padding:22px}
+    .footer{color:var(--muted); font-size:.9rem; text-align:center; margin:26px 0}
 
     @media (max-width:640px){
       .form{grid-template-columns: 1fr}
-      .hide-sm{display:none}
     }
   </style>
 </head>
 <body>
   <header>
     <div class="wrap topbar">
-      <div class="brand">
-        <div class="logo">✈</div>
-        <div>
-          <div class="title">Trip Pinboard – Florianópolis</div>
-          <div class="subtitle">Pin options with title · price · image · link. Local-only (saved in your browser).</div>
-        </div>
-      </div>
-      <div class="row hide-sm">
-        <span class="chip">No login</span>
-        <span class="chip">LocalStorage</span>
-        <!-- removed Export / Import chip -->
-      </div>
+      <div class="logo" aria-hidden="true">✈</div>
+      <div class="headline" aria-label="Título del tablero">Viaje Floripa</div>
+      <div class="spacer" aria-hidden="true"></div>
     </div>
   </header>
 
   <main class="wrap">
-    <!-- Tabs -->
-    <div class="panel">
-      <div class="tabs" id="tabs"></div>
-      <div class="toolbar">
+    <!-- Panel de tabs -->
+    <section class="panel">
+      <nav class="tabs" id="tabs" aria-label="Categorías"></nav>
+
+      <div class="toolbar" aria-label="Filtros y acciones">
         <div class="left">
-          <div class="pill-input"><span>🔎</span><input id="search" placeholder="Filter by title or note…"></div>
-          <button class="btn" id="sortPrice">Sort by price</button>
-          <button class="btn" id="sortTitle">Sort by title</button>
+          <div class="pill-input"><span>🔎</span><input id="search" placeholder="Buscar por título o nota…"></div>
+          <button class="btn" id="sortPrice" title="Ordenar por precio">Ordenar: Precio</button>
+          <button class="btn" id="sortTitle" title="Ordenar por título">Ordenar: Título</button>
         </div>
         <div class="right">
-          <!-- Export/Import removed -->
-          <button class="btn-ghost" id="demoBtn">Load demo</button>
-          <button class="btn-danger" id="clearBtn">Clear all</button>
+          <button class="btn btn-primary" id="demoBtn" title="Cargar algunas tarjetas de ejemplo">Cargar demo</button>
+          <button class="btn btn-danger" id="clearBtn" title="Eliminar todas las tarjetas">Borrar todo</button>
         </div>
       </div>
 
-      <!-- Add form -->
-      <section class="form" id="addForm">
-        <div class="pill-input"><span>📝</span><input id="title" placeholder="Title (e.g., Fiat Argo or Hotel XYZ)" /></div>
-        <div class="pill-input"><span>💲</span><input id="price" placeholder="Price (e.g., 150 USD)" /></div>
-        <div class="pill-input wide"><span>🔗</span><input id="link" placeholder="Link (https://…)" /></div>
-        <div class="pill-input wide"><span>🖼️</span><input id="image" placeholder="Image URL (https://…)" /></div>
-        <div class="pill-input wide"><span>🗒️</span><input id="note" placeholder="Notes (optional)" /></div>
-        <div style="display:flex; gap:10px; align-items:center">
-          <button id="addBtn">Add to <span id="addCatLabel"></span></button>
-          <label class="pill-input"><span>🏷️</span><input id="tag" placeholder="Tag (optional: e.g., refundable, 4pax)"></label>
+      <!-- Formulario de alta -->
+      <section class="form" id="addForm" aria-label="Agregar tarjeta">
+        <label class="pill-input"><span>📝</span><input id="title" placeholder="Título (p. ej., Fiat Argo, Hotel XYZ)" /></label>
+        <label class="pill-input"><span>💲</span><input id="price" placeholder="Precio (p. ej., R$ 210/día)" /></label>
+        <label class="pill-input wide"><span>🔗</span><input id="link" placeholder="Enlace (https://…)" /></label>
+        <label class="pill-input wide"><span>🖼️</span><input id="image" placeholder="URL de imagen (https://…)" /></label>
+        <label class="pill-input wide"><span>🗒️</span><input id="note" placeholder="Notas (opcional)" /></label>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <button class="btn" id="addBtn">Agregar a <span id="addCatLabel"></span></button>
+          <label class="pill-input"><span>🏷️</span><input id="tag" placeholder="Etiqueta (opcional: reembolsable, 4pax)"></label>
         </div>
       </section>
-    </div>
-
-    <!-- Cards grid -->
-    <section class="panel">
-      <div id="grid" class="grid"></div>
-      <div id="empty" class="empty" style="display:none">Nothing here yet. Add your first card above ✨</div>
     </section>
 
-    <div class="footer">Built for friends planning a trip to Floripa.</div>
+    <!-- Grid de tarjetas -->
+    <section class="panel" aria-live="polite">
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty" style="display:none">Todavía no hay nada. Agregá tu primera tarjeta arriba ✨</div>
+    </section>
+
+    <div class="footer">Hecho para amigos planificando un viaje a Floripa.</div>
   </main>
+
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-  // ⬇️ TUS CREDENCIALES
+  // ⬇️ TUS CREDENCIALES (no se tocan)
   const SUPABASE_URL = 'https://sgoegodfbqicmllblllq.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNnb2Vnb2RmYnFpY21sbGJsbGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MTMyNDUsImV4cCI6MjA3ODA4OTI0NX0.X2v2WGewNrz5UWipDhYU51lNWyIFueSs-y3jipDx3SA';
 
@@ -190,13 +206,13 @@
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const DEFAULT_CATEGORIES = [
-    { id:'cars', name:'Cars' },
-    { id:'hotels', name:'Hotels' },
-    { id:'transport', name:'Transport to Floripa' },
-    { id:'plans', name:'Plans & Ideas' },
+    { id:'cars', name:'Autos' },
+    { id:'hotels', name:'Hoteles' },
+    { id:'transport', name:'Transporte a Florianópolis' },
+    { id:'plans', name:'Planes e ideas' },
   ];
 
-  // ====== UI refs ======
+  // ====== Referencias UI ======
   const tabsEl = document.getElementById('tabs');
   const gridEl = document.getElementById('grid');
   const emptyEl = document.getElementById('empty');
@@ -240,15 +256,15 @@
       note: noteEl.value.trim(),
       tag: tagEl.value.trim()
     });
-    if(!item.title){ alert('Please add a title'); return; }
+    if(!item.title){ alert('Añadí un título'); return; }
     if(item.image && !isValidUrl(item.image)){
-      if(!confirm('Image URL looks invalid. Add anyway?')) return;
+      if(!confirm('La URL de imagen parece inválida. ¿Agregar igual?')) return;
     }
     if(item.link && !isValidUrl(item.link)){
-      if(!confirm('Link looks invalid. Add anyway?')) return;
+      if(!confirm('El enlace parece inválido. ¿Agregar igual?')) return;
     }
     const { error } = await supabase.from('items').insert(item);
-    if(error){ alert('Could not add: ' + error.message); return; }
+    if(error){ alert('No se pudo agregar: ' + error.message); return; }
     clearForm();
   });
 
@@ -257,7 +273,7 @@
   sortTitleBtn.addEventListener('click', () => { sortMode = 'title'; render(); });
 
   demoBtn.addEventListener('click', async () => {
-    if(!confirm('Load demo cards into the SHARED board?')) return;
+    if(!confirm('¿Cargar tarjetas de DEMO en el tablero COMPARTIDO?')) return;
     const sample = [
       {category:'cars', title:'Fiat Argo (Localiza)', price:'R$ 210/día', link:'https://www.localiza.com/'},
       {category:'cars', title:'Chevrolet Onix (Movida)', price:'R$ 230/día', link:'https://www.movida.com.br/'},
@@ -269,7 +285,7 @@
   });
 
   clearBtn.addEventListener('click', async () => {
-    if(confirm('Delete ALL cards from the SHARED board?')){
+    if(confirm('¿Eliminar TODAS las tarjetas del tablero COMPARTIDO?')){
       await supabase.from('items').delete().eq('board_id', BOARD_ID);
     }
   });
@@ -305,13 +321,13 @@
     render();
   }
 
-  // Realtime without server-side filter; client-guarded by board_id.
+  // Realtime (filtrado en cliente por board_id)
   function subscribeRealtime(){
     supabase
       .channel('items')
       .on('postgres_changes', { event:'*', schema:'public', table:'items' }, payload => {
         const row = payload.new ?? payload.old;
-        if(row?.board_id !== BOARD_ID) return; // ignore other boards
+        if(row?.board_id !== BOARD_ID) return;
         applyChange(payload);
         render();
       })
@@ -343,7 +359,6 @@
       el.setAttribute('aria-selected', String(cat.id===currentCat));
       tabsEl.appendChild(el);
     });
-    // Delegated click so handlers never get lost
     if(!tabsEl.__bound){
       tabsEl.addEventListener('click', (e) => {
         const btn = e.target.closest('.tab');
@@ -378,13 +393,10 @@
     emptyEl.style.display = filtered.length ? 'none' : 'block';
 
     for(const item of filtered){ gridEl.appendChild(cardEl(item)); }
-    enableDragReorder();
   }
 
   function cardEl(item){
-    const card = document.createElement('article'); card.className='card'; card.draggable = true;
-    card.addEventListener('dragstart', (e)=>{ card.classList.add('dragging'); e.dataTransfer.setData('text/plain', item.id); });
-    card.addEventListener('dragend', ()=> card.classList.remove('dragging'));
+    const card = document.createElement('article'); card.className='card';
 
     const img = document.createElement('img');
     img.className='thumb'; img.loading='lazy'; img.alt=item.title||'';
@@ -393,86 +405,44 @@
     card.appendChild(img);
 
     const body = document.createElement('div'); body.className='content';
-    const h3 = document.createElement('div'); h3.style.fontWeight='800'; h3.style.fontSize='1.05rem';
-    if(item.link){ const a=document.createElement('a'); a.href=item.link; a.target='_blank'; a.rel='noopener noreferrer'; a.textContent=item.title||'Untitled'; h3.appendChild(a); }
-    else { h3.textContent = item.title || 'Untitled'; }
+    const h3 = document.createElement('div'); h3.className='h3';
+    if(item.link){ const a=document.createElement('a'); a.href=item.link; a.target='_blank'; a.rel='noopener noreferrer'; a.textContent=item.title||'Sin título'; h3.appendChild(a); }
+    else { h3.textContent = item.title || 'Sin título'; }
     body.appendChild(h3);
 
-    const price = document.createElement('div'); price.className='price'; price.textContent=item.price||''; body.appendChild(price);
+    if(item.price){ const price = document.createElement('div'); price.className='price'; price.textContent=item.price; body.appendChild(price); }
     if(item.tag){ const tag=document.createElement('span'); tag.className='tag'; tag.textContent=item.tag; body.appendChild(tag); }
     if(item.note){ const p=document.createElement('div'); p.className='note'; p.textContent=item.note; body.appendChild(p); }
 
     const meta = document.createElement('div'); meta.className='meta';
-    const btns = document.createElement('div'); btns.className='btns';
-
-    const like = document.createElement('div'); like.className='like'; like.title='Like'; like.textContent = `❤️ ${item.likes||0}`;
+    const like = document.createElement('div'); like.className='like'; like.title='Me gusta'; like.textContent = `❤️ ${item.likes||0}`;
     like.onclick = async () => { await supabase.from('items').update({ likes: (item.likes||0)+1 }).eq('id', item.id); };
-    meta.appendChild(like);
 
-    const editBtn = document.createElement('button'); editBtn.textContent='Edit';
+    const actions = document.createElement('div');
+
+    const editBtn = document.createElement('button'); editBtn.textContent='Editar';
     editBtn.onclick = async () => {
-      const title = prompt('Title:', item.title||''); if(title===null) return;
-      const price = prompt('Price:', item.price||''); if(price===null) return;
-      const link  = prompt('Link URL:', item.link||''); if(link===null) return;
-      const image = prompt('Image URL:', item.image||''); if(image===null) return;
-      const note  = prompt('Notes:', item.note||''); if(note===null) return;
-      const tag   = prompt('Tag (optional):', item.tag||''); if(tag===null) return;
+      const title = prompt('Título:', item.title||''); if(title===null) return;
+      const price = prompt('Precio:', item.price||''); if(price===null) return;
+      const link  = prompt('URL del enlace:', item.link||''); if(link===null) return;
+      const image = prompt('URL de la imagen:', item.image||''); if(image===null) return;
+      const note  = prompt('Notas:', item.note||''); if(note===null) return;
+      const tag   = prompt('Etiqueta (opcional):', item.tag||''); if(tag===null) return;
       await supabase.from('items').update({ title, price, link, image, note, tag }).eq('id', item.id);
     };
 
-    const dupBtn = document.createElement('button'); dupBtn.textContent='Duplicate';
-    dupBtn.onclick = async () => {
-      const clone = { ...item, id: crypto.randomUUID(), created_at: null, likes:0, position: Date.now() };
-      delete clone.created_at;
-      await supabase.from('items').insert(clone);
-    };
-
-    const delBtn = document.createElement('button'); delBtn.className='btn-danger'; delBtn.textContent='Delete';
+    const delBtn = document.createElement('button'); delBtn.className='btn btn-danger'; delBtn.textContent='Eliminar';
     delBtn.onclick = async () => {
-      if(!confirm('Delete this card?')) return;
+      if(!confirm('¿Eliminar esta tarjeta?')) return;
       const { error } = await supabase.from('items').delete().eq('id', item.id);
-      if(!error){
-        // Optimistic remove to reflect instantly
-        const key = (item.category || '').toLowerCase();
-        state.items[key] = (state.items[key] || []).filter(i => i.id !== item.id);
-        render();
-      } else {
-        alert('Could not delete: ' + error.message);
-      }
+      if(error){ alert('No se pudo eliminar: ' + error.message); }
     };
 
-    btns.append(editBtn, dupBtn, delBtn); meta.appendChild(btns); body.appendChild(meta); card.appendChild(body); return card;
-  }
-
-  function enableDragReorder(){
-    gridEl.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      const dragging = document.querySelector('.card.dragging');
-      const afterEl = getDragAfterElement(gridEl, e.clientY);
-      if(afterEl == null) gridEl.appendChild(dragging); else gridEl.insertBefore(dragging, afterEl);
-    });
-    gridEl.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      const cards = Array.from(gridEl.querySelectorAll('.card'));
-      const updates = [];
-      for(let i=0;i<cards.length;i++){
-        const titleNode = cards[i].querySelector('.content div');
-        const title = titleNode.textContent.trim();
-        const item = (state.items[currentCat]||[]).find(x => (x.title||'Untitled')===title);
-        if(item){ updates.push(supabase.from('items').update({ position: i+1 }).eq('id', item.id)); }
-      }
-      await Promise.all(updates);
-    }, { once:true });
-  }
-
-  function getDragAfterElement(container, y){
-    const els = [...container.querySelectorAll('.card:not(.dragging)')];
-    return els.reduce((closest, child) => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      if(offset < 0 && offset > closest.offset) return { offset, element: child };
-      return closest;
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
+    actions.append(editBtn, delBtn);
+    meta.append(like, actions);
+    body.appendChild(meta);
+    card.appendChild(body);
+    return card;
   }
 
   function clearForm(){ titleEl.value=''; priceEl.value=''; linkEl.value=''; imageEl.value=''; noteEl.value=''; tagEl.value=''; }
@@ -480,7 +450,7 @@
 
   function parsePrice(str){
     if(!str) return Number.POSITIVE_INFINITY;
-    const m = (str.match(/[\\d.,]+/)||[''])[0].replace(/\\./g,'').replace(',','.');
+    const m = (str.match(/[\d.,]+/)||[''])[0].replace(/\./g,'').replace(',','.');
     const num = parseFloat(m);
     return isNaN(num) ? Number.POSITIVE_INFINITY : num;
   }
@@ -490,6 +460,5 @@
     return `https://source.unsplash.com/600x400/?${s}`;
   }
 </script>
-
 </body>
 </html>
