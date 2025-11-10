@@ -52,13 +52,23 @@
       padding:8px 12px; border-radius: 999px; font-weight:600;
       background: #1b1f31; color:#cdd6e5; border:1px solid rgba(255,255,255,.06)
     }
+
     .tabs{display:flex; gap:10px; flex-wrap:wrap}
     .tab{
-      padding:10px 14px; border-radius: 999px; border:1px solid rgba(255,255,255,.08);
-      background:#13182a; color:#dfe6f5; cursor:pointer; font-weight:700;
-      transition:.2s transform; user-select:none
+      padding:12px 18px; border-radius: 999px; border:1px solid rgba(255,255,255,.08);
+      background:#13182a; color:#dfe6f5; cursor:pointer; font-weight:800;
+      transition:.2s transform; user-select:none; font-size:1.05rem;
     }
-    .tab.active{background: linear-gradient(135deg, rgba(84,210,210,.25), rgba(168,130,255,.25)); border-color: rgba(255,255,255,.18); box-shadow: 0 6px 18px rgba(0,0,0,.35)}
+    /* Make Cars / Hotels / Transport bigger */
+    .tab[data-id="cars"], .tab[data-id="hotels"], .tab[data-id="transport"]{
+      font-size:1.25rem; padding:14px 22px;
+    }
+    .tab.active, .tab[aria-selected="true"]{
+      background: linear-gradient(135deg, rgba(84,210,210,.30), rgba(168,130,255,.30));
+      border-color: rgba(255,255,255,.28);
+      box-shadow: 0 8px 22px rgba(0,0,0,.45), 0 0 0 2px rgba(84,210,210,.12) inset;
+      outline: 0;
+    }
     .tab:active{transform:scale(.98)}
 
     .panel{
@@ -123,7 +133,7 @@
       <div class="row hide-sm">
         <span class="chip">No login</span>
         <span class="chip">LocalStorage</span>
-        <span class="chip">Export / Import</span>
+        <!-- removed Export / Import chip -->
       </div>
     </div>
   </header>
@@ -139,9 +149,7 @@
           <button class="btn" id="sortTitle">Sort by title</button>
         </div>
         <div class="right">
-          <button class="btn-accent" id="exportBtn">Export JSON</button>
-          <label class="btn" for="importFile">Import JSON</label>
-          <input type="file" id="importFile" accept="application/json" style="display:none">
+          <!-- Export/Import removed -->
           <button class="btn-ghost" id="demoBtn">Load demo</button>
           <button class="btn-danger" id="clearBtn">Clear all</button>
         </div>
@@ -167,7 +175,7 @@
       <div id="empty" class="empty" style="display:none">Nothing here yet. Add your first card above ✨</div>
     </section>
 
-    <div class="footer">Built for friends planning a trip to Floripa. Tip: use <strong>Export</strong> to share a JSON with your group and <strong>Import</strong> on their browsers.</div>
+    <div class="footer">Built for friends planning a trip to Floripa.</div>
   </main>
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -188,7 +196,7 @@
     { id:'plans', name:'Plans & Ideas' },
   ];
 
-  // ====== UI refs (coinciden con tu HTML) ======
+  // ====== UI refs ======
   const tabsEl = document.getElementById('tabs');
   const gridEl = document.getElementById('grid');
   const emptyEl = document.getElementById('empty');
@@ -207,12 +215,10 @@
   const sortPriceBtn = document.getElementById('sortPrice');
   const sortTitleBtn = document.getElementById('sortTitle');
 
-  const exportBtn = document.getElementById('exportBtn');
-  const importFile = document.getElementById('importFile');
   const demoBtn = document.getElementById('demoBtn');
   const clearBtn = document.getElementById('clearBtn');
 
-  // ====== Estado (en memoria) ======
+  // ====== Estado ======
   let state = { categories: DEFAULT_CATEGORIES, items: { cars:[], hotels:[], transport:[], plans:[] } };
   let currentCat = 'cars';
   let searchQuery = '';
@@ -249,31 +255,6 @@
   searchEl.addEventListener('input', () => { searchQuery = searchEl.value.toLowerCase(); render(); });
   sortPriceBtn.addEventListener('click', () => { sortMode = 'price'; render(); });
   sortTitleBtn.addEventListener('click', () => { sortMode = 'title'; render(); });
-
-  exportBtn.addEventListener('click', async () => {
-    const { data } = await supabase.from('items').select('*').eq('board_id', BOARD_ID);
-    const byCat = { cars:[], hotels:[], transport:[], plans:[] };
-    for(const r of data){ (byCat[(r.category||'').toLowerCase()] ||= []).push(r); }
-    const blob = new Blob([JSON.stringify({ categories: DEFAULT_CATEGORIES, items: byCat }, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob); const a = document.createElement('a');
-    a.href = url; a.download = 'viaje-floripa-export.json'; a.click(); URL.revokeObjectURL(url);
-  });
-
-  importFile.addEventListener('change', async (e) => {
-    const f = e.target.files?.[0]; if(!f) return;
-    try {
-      const imported = JSON.parse(await f.text());
-      const rows = [];
-      for(const [cat, arr] of Object.entries(imported.items||{})){
-        for(const x of arr){ rows.push(toRow({...x, category: cat})); }
-      }
-      if(rows.length){
-        const { error } = await supabase.from('items').insert(rows);
-        if(error) alert('Import failed: '+error.message);
-      }
-    } catch(err){ alert('Import failed: ' + err.message); }
-    e.target.value = '';
-  });
 
   demoBtn.addEventListener('click', async () => {
     if(!confirm('Load demo cards into the SHARED board?')) return;
@@ -324,7 +305,7 @@
     render();
   }
 
-  // ✅ Realtime without server-side filter; client-guarded by board_id.
+  // Realtime without server-side filter; client-guarded by board_id.
   function subscribeRealtime(){
     supabase
       .channel('items')
@@ -358,11 +339,28 @@
       const el = document.createElement('button');
       el.className = 'tab' + (cat.id===currentCat ? ' active':'' );
       el.textContent = cat.name;
+      el.dataset.id = cat.id;
       el.setAttribute('aria-selected', String(cat.id===currentCat));
-      // ✅ re-render tabs when switching categories so .active updates instantly
-      el.onclick = () => { currentCat = cat.id; renderTabs(); render(); };
       tabsEl.appendChild(el);
     });
+    // Delegated click so handlers never get lost
+    if(!tabsEl.__bound){
+      tabsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tab');
+        if(!btn) return;
+        const id = btn.dataset.id;
+        if(!id || id===currentCat) return;
+        currentCat = id;
+        for(const b of tabsEl.querySelectorAll('.tab')){
+          const isSel = b.dataset.id===currentCat;
+          b.classList.toggle('active', isSel);
+          b.setAttribute('aria-selected', String(isSel));
+        }
+        addCatLabel.textContent = state.categories.find(c=>c.id===currentCat)?.name || '';
+        render();
+      });
+      tabsEl.__bound = true;
+    }
     addCatLabel.textContent = state.categories.find(c=>c.id===currentCat)?.name || '';
   }
 
@@ -434,7 +432,7 @@
       if(!confirm('Delete this card?')) return;
       const { error } = await supabase.from('items').delete().eq('id', item.id);
       if(!error){
-        // ✅ Optimistic remove to reflect instantly, even if realtime lags
+        // Optimistic remove to reflect instantly
         const key = (item.category || '').toLowerCase();
         state.items[key] = (state.items[key] || []).filter(i => i.id !== item.id);
         render();
@@ -482,7 +480,7 @@
 
   function parsePrice(str){
     if(!str) return Number.POSITIVE_INFINITY;
-    const m = (str.match(/[\d.,]+/)||[''])[0].replace(/\./g,'').replace(',','.');
+    const m = (str.match(/[\\d.,]+/)||[''])[0].replace(/\\./g,'').replace(',','.');
     const num = parseFloat(m);
     return isNaN(num) ? Number.POSITIVE_INFINITY : num;
   }
