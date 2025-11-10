@@ -58,7 +58,7 @@
       background:#13182a; color:#dfe6f5; cursor:pointer; font-weight:700;
       transition:.2s transform; user-select:none
     }
-    .tab.active{background: linear-gradient(135deg, rgba(84,210,210,.25), rgba(168,130,255,.25)); border-color: rgba(255,255,255,.18)}
+    .tab.active{background: linear-gradient(135deg, rgba(84,210,210,.25), rgba(168,130,255,.25)); border-color: rgba(255,255,255,.18); box-shadow: 0 6px 18px rgba(0,0,0,.35)}
     .tab:active{transform:scale(.98)}
 
     .panel{
@@ -324,11 +324,15 @@
     render();
   }
 
+  // ✅ Realtime without server-side filter; client-guarded by board_id.
   function subscribeRealtime(){
     supabase
       .channel('items')
-      .on('postgres_changes', { event:'*', schema:'public', table:'items', filter:`board_id=eq.${BOARD_ID}` }, payload => {
-        applyChange(payload); render();
+      .on('postgres_changes', { event:'*', schema:'public', table:'items' }, payload => {
+        const row = payload.new ?? payload.old;
+        if(row?.board_id !== BOARD_ID) return; // ignore other boards
+        applyChange(payload);
+        render();
       })
       .subscribe();
   }
@@ -347,14 +351,16 @@
     }
   }
 
-  // ====== UI (igual a tu versión) ======
+  // ====== UI ======
   function renderTabs(){
     tabsEl.innerHTML = '';
     state.categories.forEach(cat => {
       const el = document.createElement('button');
       el.className = 'tab' + (cat.id===currentCat ? ' active':'' );
       el.textContent = cat.name;
-      el.onclick = () => { currentCat = cat.id; render(); };
+      el.setAttribute('aria-selected', String(cat.id===currentCat));
+      // ✅ re-render tabs when switching categories so .active updates instantly
+      el.onclick = () => { currentCat = cat.id; renderTabs(); render(); };
       tabsEl.appendChild(el);
     });
     addCatLabel.textContent = state.categories.find(c=>c.id===currentCat)?.name || '';
@@ -424,10 +430,20 @@
     };
 
     const delBtn = document.createElement('button'); delBtn.className='btn-danger'; delBtn.textContent='Delete';
-    delBtn.onclick = async () => { if(confirm('Delete this card?')) await supabase.from('items').delete().eq('id', item.id); };
+    delBtn.onclick = async () => {
+      if(!confirm('Delete this card?')) return;
+      const { error } = await supabase.from('items').delete().eq('id', item.id);
+      if(!error){
+        // ✅ Optimistic remove to reflect instantly, even if realtime lags
+        const key = (item.category || '').toLowerCase();
+        state.items[key] = (state.items[key] || []).filter(i => i.id !== item.id);
+        render();
+      } else {
+        alert('Could not delete: ' + error.message);
+      }
+    };
 
-    btns.append(editBtn, dupBtn, delBtn); meta.appendChild(btns); body.appendChild(meta); card.appendChild(body);
-    return card;
+    btns.append(editBtn, dupBtn, delBtn); meta.appendChild(btns); body.appendChild(meta); card.appendChild(body); return card;
   }
 
   function enableDragReorder(){
@@ -466,7 +482,7 @@
 
   function parsePrice(str){
     if(!str) return Number.POSITIVE_INFINITY;
-    const m = (str.match(/[\\d.,]+/)||[''])[0].replace(/\\./g,'').replace(',','.');
+    const m = (str.match(/[\d.,]+/)||[''])[0].replace(/\./g,'').replace(',','.');
     const num = parseFloat(m);
     return isNaN(num) ? Number.POSITIVE_INFINITY : num;
   }
