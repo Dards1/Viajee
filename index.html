@@ -133,7 +133,6 @@
       <div class="row hide-sm">
         <span class="chip">No login</span>
         <span class="chip">LocalStorage</span>
-        <!-- removed Export / Import chip -->
       </div>
     </div>
   </header>
@@ -149,7 +148,6 @@
           <button class="btn" id="sortTitle">Sort by title</button>
         </div>
         <div class="right">
-          <!-- Export/Import removed -->
           <button class="btn-ghost" id="demoBtn">Load demo</button>
           <button class="btn-danger" id="clearBtn">Clear all</button>
         </div>
@@ -157,10 +155,10 @@
 
       <!-- Add form -->
       <section class="form" id="addForm">
-        <div class="pill-input"><span>📝</span><input id="title" placeholder="Title (e.g., Fiat Argo or Hotel XYZ)" /></div>
+        <div class="pill-input"><span>📝</span><input id="title" placeholder="Title (auto from link if empty)" /></div>
         <div class="pill-input"><span>💲</span><input id="price" placeholder="Price (e.g., 150 USD)" /></div>
         <div class="pill-input wide"><span>🔗</span><input id="link" placeholder="Link (https://…)" /></div>
-        <div class="pill-input wide"><span>🖼️</span><input id="image" placeholder="Image URL (https://…)" /></div>
+        <div class="pill-input wide"><span>🖼️</span><input id="image" placeholder="Image URL (auto from link if empty)" /></div>
         <div class="pill-input wide"><span>🗒️</span><input id="note" placeholder="Notes (optional)" /></div>
         <div style="display:flex; gap:10px; align-items:center">
           <button id="addBtn">Add to <span id="addCatLabel"></span></button>
@@ -229,24 +227,85 @@
   await initialLoad();
   subscribeRealtime();
 
+  // ====== Link Preview (Microlink) ======
+  async function fetchLinkPreview(url){
+    try{
+      const controller = new AbortController();
+      const t = setTimeout(()=>controller.abort(), 6000);
+      const q = new URL('https://api.microlink.io');
+      q.searchParams.set('url', url);
+      q.searchParams.set('audio', 'false');
+      q.searchParams.set('video', 'false');
+      q.searchParams.set('screenshot', 'false');
+      q.searchParams.set('meta', 'false');
+      const res = await fetch(q, { signal: controller.signal });
+      clearTimeout(t);
+      if(!res.ok) return null;
+      const json = await res.json();
+      const d = json?.data || {};
+      return {
+        title: d.title || d.publisher || '',
+        image: d.image?.url || '',
+        description: d.description || ''
+      };
+    }catch(e){
+      return null;
+    }
+  }
+
+  // Autofill when user pastes/finishes the link
+  linkEl.addEventListener('paste', () => setTimeout(autofillFromLink, 0));
+  linkEl.addEventListener('blur', autofillFromLink);
+
+  async function autofillFromLink(){
+    const u = linkEl.value.trim();
+    if(!u || !isValidUrl(u)) return;
+    // Only fetch if fields are empty to avoid overriding user input
+    const needTitle = !titleEl.value.trim();
+    const needImage = !imageEl.value.trim();
+    if(!needTitle && !needImage) return;
+    const prevPlaceholder = linkEl.placeholder;
+    linkEl.placeholder = 'Fetching preview…';
+    const meta = await fetchLinkPreview(u);
+    linkEl.placeholder = prevPlaceholder;
+    if(meta){
+      if(needTitle && meta.title) titleEl.value = meta.title;
+      if(needImage && meta.image) imageEl.value = meta.image;
+    }
+  }
+
   // ====== Handlers ======
   addBtn.addEventListener('click', async () => {
+    const rawLink = linkEl.value.trim();
+    // If user provided a link but left title/image empty, try to fetch before insert
+    if(rawLink && isValidUrl(rawLink) && (!titleEl.value.trim() || !imageEl.value.trim())){
+      const meta = await fetchLinkPreview(rawLink);
+      if(meta){
+        if(!titleEl.value.trim() && meta.title) titleEl.value = meta.title;
+        if(!imageEl.value.trim() && meta.image) imageEl.value = meta.image;
+      }
+    }
+
     const item = toRow({
       category: currentCat,
       title: titleEl.value.trim(),
       price: priceEl.value.trim(),
-      link: linkEl.value.trim(),
+      link: rawLink,
       image: imageEl.value.trim(),
       note: noteEl.value.trim(),
       tag: tagEl.value.trim()
     });
-    if(!item.title){ alert('Please add a title'); return; }
+
+    if(!item.title && !item.link){
+      alert('Please add at least a link or a title'); return;
+    }
     if(item.image && !isValidUrl(item.image)){
       if(!confirm('Image URL looks invalid. Add anyway?')) return;
     }
     if(item.link && !isValidUrl(item.link)){
       if(!confirm('Link looks invalid. Add anyway?')) return;
     }
+
     const { error } = await supabase.from('items').insert(item);
     if(error){ alert('Could not add: ' + error.message); return; }
     clearForm();
@@ -414,7 +473,7 @@
       const title = prompt('Title:', item.title||''); if(title===null) return;
       const price = prompt('Price:', item.price||''); if(price===null) return;
       const link  = prompt('Link URL:', item.link||''); if(link===null) return;
-      const image = prompt('Image URL:', item.image||''); if(image===null) return;
+      const image = prompt('Image URL:', item.image||''); ifimage===null) return;
       const note  = prompt('Notes:', item.note||''); if(note===null) return;
       const tag   = prompt('Tag (optional):', item.tag||''); if(tag===null) return;
       await supabase.from('items').update({ title, price, link, image, note, tag }).eq('id', item.id);
